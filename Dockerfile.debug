@@ -1,7 +1,7 @@
 # Debug Dockerfile for S3Proxy Rust implementation
 # Uses Alpine Rust base image with debugging tools
 
-FROM rust:1.75-alpine
+FROM rust:1.92-alpine
 
 # Install build dependencies and debugging tools
 RUN apk add --no-cache \
@@ -9,19 +9,25 @@ RUN apk add --no-cache \
     gdb \
     strace \
     curl \
-    ca-certificates
+    ca-certificates \
+    wget
 
 WORKDIR /app
 
-# Copy manifests
-COPY Cargo.toml Cargo.lock ./
+# Copy manifests first for better caching
+COPY Cargo.toml Cargo.lock* ./
 
-# Copy source code
+# Create a dummy src to build dependencies (for caching)
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --target x86_64-unknown-linux-musl 2>/dev/null || cargo build 2>/dev/null || true && \
+    rm -rf src
+
+# Copy actual source code
 COPY src ./src
 
 # Build debug binary (not optimized for easier debugging)
-# Note: For faster builds during development, you might want to use cargo build without --target
-RUN cargo build --target x86_64-unknown-linux-musl || cargo build
+RUN touch src/main.rs && \
+    cargo build --target x86_64-unknown-linux-musl || cargo build
 
 # Create non-root user for security
 RUN addgroup -g 1000 s3proxy && \

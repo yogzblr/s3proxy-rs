@@ -76,39 +76,100 @@ docker run -p 8080:8080 \
 
 ## Configuration
 
-### Environment Variables
+S3Proxy supports two authentication modes for each cloud provider:
+1. **Managed Identity** (default): Uses cloud-native identity (IRSA, Workload Identity, ADC)
+2. **Explicit Credentials**: Uses access keys or service account keys
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `S3PROXY_BACKEND_TYPE` | Backend type: `aws`, `azure`, `gcp` | `aws` |
-| `S3PROXY_BACKEND_CONTAINER` | Bucket/container name | Required |
-| `S3PROXY_BACKEND_PREFIX` | Optional path prefix | None |
-| `S3PROXY_BACKEND_REGION` | AWS region (AWS only) | `us-east-1` |
-| `S3PROXY_BACKEND_ENDPOINT` | Custom endpoint URL | None |
-| `S3PROXY_BIND_ADDRESS` | Server bind address | `0.0.0.0:8080` |
-| `S3PROXY_TIMEOUT_SECS` | Request timeout | `300` |
-| `S3PROXY_MAX_BODY_SIZE` | Max request size (bytes) | `5368709120` (5GB) |
-| `S3PROXY_LOG_LEVEL` | Log level | `info` |
-| `S3PROXY_CONFIG_FILE` | Optional TOML config file | None |
+Configuration can be provided via:
+- **TOML config file** (recommended for complex setups)
+- **Environment variables** (simpler, good for containers)
 
-### Config File (TOML)
+### TOML Configuration File
 
-Create `config.toml`:
+See example configurations in the `examples/` directory:
+- `examples/config-aws.toml` - AWS S3 configuration
+- `examples/config-azure.toml` - Azure Blob Storage configuration
+- `examples/config-gcp.toml` - Google Cloud Storage configuration
 
+**AWS S3 Example:**
 ```toml
 [server]
 bind_address = "0.0.0.0:8080"
 timeout_secs = 300
 max_body_size = 5368709120
 
-[backend]
-type = "aws"
-container_or_bucket = "my-bucket"
-prefix = "optional/prefix"
+[backend.aws]
+bucket_name = "my-s3-bucket"
 region = "us-east-1"
+use_managed_identity = true  # Use IRSA/environment variables
+# Or use explicit credentials:
+# use_managed_identity = false
+# access_key_id = "AKIAIOSFODNN7EXAMPLE"
+# secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ```
 
-Set `S3PROXY_CONFIG_FILE=/path/to/config.toml` to use it.
+**Azure Blob Storage Example:**
+```toml
+[backend.azure]
+account_name = "mystorageaccount"
+container_name = "my-container"
+use_managed_identity = true  # Use Workload Identity/DefaultAzureCredential
+# Or use explicit credentials:
+# use_managed_identity = false
+# access_key = "your-storage-account-access-key"
+```
+
+**Google Cloud Storage Example:**
+```toml
+[backend.gcp]
+bucket_name = "my-gcs-bucket"
+use_managed_identity = true  # Use ADC/Workload Identity
+# Or use explicit credentials:
+# use_managed_identity = false
+# service_account_path = "/path/to/service-account-key.json"
+# Or service_account_key = "{...JSON key as string...}"
+```
+
+### Environment Variables
+
+**Common Variables:**
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `S3PROXY_BACKEND_TYPE` | Backend type: `aws`, `azure`, `gcp` | `aws` |
+| `S3PROXY_BACKEND_PREFIX` | Optional path prefix | None |
+| `S3PROXY_BIND_ADDRESS` | Server bind address | `0.0.0.0:8080` |
+| `S3PROXY_TIMEOUT_SECS` | Request timeout | `300` |
+| `S3PROXY_MAX_BODY_SIZE` | Max request size (bytes) | `5368709120` (5GB) |
+| `S3PROXY_LOG_LEVEL` | Log level | `info` |
+| `S3PROXY_CONFIG_FILE` | Optional TOML config file | None |
+
+**AWS-Specific Variables:**
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `S3PROXY_AWS_BUCKET` | S3 bucket name | Yes |
+| `S3PROXY_AWS_REGION` | AWS region | Yes (default: us-east-1) |
+| `S3PROXY_AWS_USE_MANAGED_IDENTITY` | Use managed identity | No (default: true) |
+| `S3PROXY_AWS_ACCESS_KEY_ID` | Access key (if not using managed identity) | Conditional |
+| `S3PROXY_AWS_SECRET_ACCESS_KEY` | Secret key (if not using managed identity) | Conditional |
+| `S3PROXY_AWS_ENDPOINT` | Custom endpoint URL | No |
+| `S3PROXY_AWS_ALLOW_HTTP` | Allow HTTP connections | No (default: false) |
+
+**Azure-Specific Variables:**
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `S3PROXY_AZURE_ACCOUNT_NAME` | Storage account name | Yes |
+| `S3PROXY_AZURE_CONTAINER_NAME` | Container name | Yes |
+| `S3PROXY_AZURE_USE_MANAGED_IDENTITY` | Use managed identity | No (default: true) |
+| `S3PROXY_AZURE_ACCESS_KEY` | Access key (if not using managed identity) | Conditional |
+| `S3PROXY_AZURE_USE_EMULATOR` | Use Azure Storage Emulator | No (default: false) |
+
+**GCP-Specific Variables:**
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `S3PROXY_GCP_BUCKET` | GCS bucket name | Yes |
+| `S3PROXY_GCP_USE_MANAGED_IDENTITY` | Use managed identity/ADC | No (default: true) |
+| `S3PROXY_GCP_SERVICE_ACCOUNT_PATH` | Path to service account JSON file | Conditional |
+| `S3PROXY_GCP_SERVICE_ACCOUNT_KEY` | Service account JSON key as string | Conditional |
 
 ## Cloud Provider Setup
 

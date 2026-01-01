@@ -2,21 +2,27 @@
 # Uses Alpine Rust base image for smaller final image
 
 # Build stage
-FROM rust:1.75-alpine AS builder
+FROM rust:1.92-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
-# Copy manifests
-COPY Cargo.toml Cargo.lock ./
+# Copy manifests first for better caching
+COPY Cargo.toml Cargo.lock* ./
 
-# Copy source code
+# Create a dummy src to build dependencies (for caching)
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl && \
+    rm -rf src
+
+# Copy actual source code
 COPY src ./src
 
 # Build release binary with static linking
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN touch src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl
 
 # Runtime stage - Distroless
 FROM gcr.io/distroless/cc-debian12:nonroot

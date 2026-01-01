@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # MinIO - S3-compatible object storage for testing
+  minio:
+    image: minio/minio:latest
+    container_name: s3proxy-minio
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - s3proxy-network
+
+  # S3Proxy - Production distroless image
+  # Use local build if image doesn't exist: build: . or image: yogzblr/s3proxy-rs:latest
+  s3proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yogzblr/s3proxy-rs:latest
+    container_name: s3proxy-rs
+    ports:
+      - "8080:8080"
+    environment:
+      # Backend configuration - using MinIO as S3-compatible backend
+      S3PROXY_BACKEND_TYPE: aws
+      S3PROXY_AWS_BUCKET: test-bucket
+      S3PROXY_AWS_REGION: us-east-1
+      S3PROXY_AWS_ENDPOINT: http://minio:9000
+      S3PROXY_AWS_USE_MANAGED_IDENTITY: "false"
+      S3PROXY_AWS_ACCESS_KEY_ID: minioadmin
+      S3PROXY_AWS_SECRET_ACCESS_KEY: minioadmin
+      S3PROXY_AWS_ALLOW_HTTP: "true"
+      
+      # Server configuration
+      S3PROXY_BIND_ADDRESS: "0.0.0.0:8080"
+      S3PROXY_TIMEOUT_SECS: "300"
+      S3PROXY_MAX_BODY_SIZE: "5368709120"
+      S3PROXY_LOG_LEVEL: "info"
+      RUST_LOG: "info"
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - s3proxy-network
+
+  # S3Proxy Debug - Debug image with debugging tools
+  # Use local build if image doesn't exist
+  s3proxy-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile.debug
+    image: yogzblr/s3proxy-rs:debug
+    container_name: s3proxy-rs-debug
+    ports:
+      - "8081:8080"
+    environment:
+      # Backend configuration - using MinIO as S3-compatible backend
+      S3PROXY_BACKEND_TYPE: aws
+      S3PROXY_AWS_BUCKET: test-bucket
+      S3PROXY_AWS_REGION: us-east-1
+      S3PROXY_AWS_ENDPOINT: http://minio:9000
+      S3PROXY_AWS_USE_MANAGED_IDENTITY: "false"
+      S3PROXY_AWS_ACCESS_KEY_ID: minioadmin
+      S3PROXY_AWS_SECRET_ACCESS_KEY: minioadmin
+      S3PROXY_AWS_ALLOW_HTTP: "true"
+      
+      # Server configuration
+      S3PROXY_BIND_ADDRESS: "0.0.0.0:8080"
+      S3PROXY_TIMEOUT_SECS: "300"
+      S3PROXY_MAX_BODY_SIZE: "5368709120"
+      S3PROXY_LOG_LEVEL: "debug"
+      RUST_LOG: "debug"
+      RUST_BACKTRACE: "1"
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - s3proxy-network
+    profiles:
+      - debug  # Only start with --profile debug
+
+volumes:
+  minio-data:
+    driver: local
+
+networks:
+  s3proxy-network:
+    driver: bridge
+

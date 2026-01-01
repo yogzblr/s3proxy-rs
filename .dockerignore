@@ -2,6 +2,7 @@ target/
 .git/
 .gitignore
 *.md
+!README.md
 deploy/
 charts/
 s3-tests/
@@ -9,3 +10,7 @@ docs/
 pom.xml
 *.java
 *.class
+.cursor/
+*.mdc
+docker-compose*.yaml
+!docker-compose.yaml

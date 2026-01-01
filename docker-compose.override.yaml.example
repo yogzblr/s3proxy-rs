@@ -1,0 +1,14 @@
+# Example override file for custom configuration
+# Copy this to docker-compose.override.yaml to customize
+
+version: '3.8'
+
+services:
+  s3proxy:
+    # Override with TOML config file
+    volumes:
+      - ./examples/config-aws.toml:/etc/s3proxy/config.toml:ro
+    environment:
+      S3PROXY_CONFIG_FILE: /etc/s3proxy/config.toml
+      # Individual env vars will override config file values
+
