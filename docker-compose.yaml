@@ -23,12 +23,12 @@ services:
       - s3proxy-network
 
   # S3Proxy - Production distroless image
-  # Use local build if image doesn't exist: build: . or image: yogzblr/s3proxy-rs:latest
+  # Uses local build - will build from Dockerfile if image doesn't exist
   s3proxy:
     build:
       context: .
       dockerfile: Dockerfile
-    image: yogzblr/s3proxy-rs:latest
+    image: s3proxy-rs:latest
     container_name: s3proxy-rs
     ports:
       - "8080:8080"
@@ -62,12 +62,12 @@ services:
       - s3proxy-network
 
   # S3Proxy Debug - Debug image with debugging tools
-  # Use local build if image doesn't exist
+  # Uses local build - will build from Dockerfile.debug if image doesn't exist
   s3proxy-debug:
     build:
       context: .
       dockerfile: Dockerfile.debug
-    image: yogzblr/s3proxy-rs:debug
+    image: s3proxy-rs:debug
     container_name: s3proxy-rs-debug
     ports:
       - "8081:8080"
