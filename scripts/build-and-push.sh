@@ -1,35 +1,41 @@
 #!/bin/bash
-# Build and push Docker images for S3Proxy-RS
+set -euo pipefail
 
-set -e
+IMAGE_NAME="yogzblr/s3proxy-rs"
+LATEST_TAG="${IMAGE_NAME}:latest"
+DEBUG_TAG="${IMAGE_NAME}:debug"
 
-DOCKER_USER="${DOCKER_USER:-yogzblr}"
-IMAGE_NAME="s3proxy-rs"
-VERSION="${VERSION:-latest}"
+echo "=========================================="
+echo "Building S3Proxy Docker Images"
+echo "=========================================="
 
-echo "Building distroless image..."
-docker build -t ${DOCKER_USER}/${IMAGE_NAME}:${VERSION} -f Dockerfile .
-
-echo "Building debug image..."
-docker build -t ${DOCKER_USER}/${IMAGE_NAME}:debug -f Dockerfile.debug .
-
-echo "Tagging images..."
-docker tag ${DOCKER_USER}/${IMAGE_NAME}:${VERSION} ${DOCKER_USER}/${IMAGE_NAME}:latest
-
-echo "Images built successfully!"
 echo ""
-echo "To push to Docker Hub, run:"
-echo "  docker login"
-echo "  docker push ${DOCKER_USER}/${IMAGE_NAME}:latest"
-echo "  docker push ${DOCKER_USER}/${IMAGE_NAME}:debug"
+echo "Building distroless image: ${LATEST_TAG}"
+docker build -t "${LATEST_TAG}" -f Dockerfile .
+
 echo ""
-echo "Or run this script with PUSH=true:"
-echo "  PUSH=true ./scripts/build-and-push.sh"
+echo "Building debug image: ${DEBUG_TAG}"
+docker build -t "${DEBUG_TAG}" -f Dockerfile.debug .
 
-if [ "${PUSH}" = "true" ]; then
-    echo "Pushing images to Docker Hub..."
-    docker push ${DOCKER_USER}/${IMAGE_NAME}:latest
-    docker push ${DOCKER_USER}/${IMAGE_NAME}:debug
-    echo "Images pushed successfully!"
-fi
+echo ""
+echo "=========================================="
+echo "Pushing Docker Images to Docker Hub"
+echo "=========================================="
 
+echo ""
+echo "Pushing distroless image: ${LATEST_TAG}"
+docker push "${LATEST_TAG}"
+
+echo ""
+echo "Pushing debug image: ${DEBUG_TAG}"
+docker push "${DEBUG_TAG}"
+
+echo ""
+echo "=========================================="
+echo "Docker images built and pushed successfully!"
+echo "=========================================="
+echo ""
+echo "Images:"
+echo "  - ${LATEST_TAG}"
+echo "  - ${DEBUG_TAG}"
+echo ""

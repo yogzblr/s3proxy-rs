@@ -306,6 +306,57 @@ curl http://localhost:8080/my-bucket/test.txt
 curl "http://localhost:8080/my-bucket?prefix=test"
 ```
 
+### Using Python boto3
+
+A comprehensive test script using boto3 is provided:
+
+```bash
+# Install dependencies
+pip install -r requirements-test.txt
+
+# Run tests against S3Proxy (default: http://localhost:8080)
+python3 test_s3proxy_boto3.py
+
+# Custom endpoint and bucket
+python3 test_s3proxy_boto3.py \
+  --endpoint http://localhost:8080 \
+  --bucket my-test-bucket \
+  --access-key minioadmin \
+  --secret-key minioadmin
+
+# Test with MinIO (using docker-compose)
+docker-compose up -d
+python3 test_s3proxy_boto3.py --endpoint http://localhost:8080
+```
+
+The test script performs:
+- Service health check
+- Bucket creation
+- PUT operations (multiple objects)
+- GET operations (with content verification)
+- HEAD operations (metadata retrieval)
+- LIST operations (with prefix filtering)
+- DELETE operations
+- Cleanup
+
+Example output:
+```
+============================================================
+S3Proxy Boto3 Test Suite
+============================================================
+Endpoint: http://localhost:8080
+Bucket: test-bucket
+Waiting for S3Proxy at http://localhost:8080...
+✓ S3Proxy is ready!
+
+[TEST] Create Bucket
+✓ Bucket 'test-bucket' created successfully
+
+[TEST] PUT Object: s3://test-bucket/test1.txt
+✓ Object uploaded successfully (size: 38 bytes)
+...
+```
+
 ## Observability
 
 ### Logging

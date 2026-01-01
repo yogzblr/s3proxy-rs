@@ -14,3 +14,6 @@ pom.xml
 *.mdc
 docker-compose*.yaml
 !docker-compose.yaml
+# Keep Zscaler CA cert and Cargo config for Docker builds
+!zscaler-ca.crt
+!.cargo/

@@ -4,35 +4,78 @@
 FROM rust:1.92-alpine
 
 # Install build dependencies and debugging tools
-RUN apk add --no-cache \
+RUN echo "==> Installing build dependencies and debugging tools..." && \
+    apk add --no-cache \
     musl-dev \
+    gcc \
+    openssl-dev \
+    pkgconfig \
+    ca-certificates \
     gdb \
     strace \
     curl \
-    ca-certificates \
-    wget
+    wget && \
+    update-ca-certificates && \
+    echo "==> Build dependencies installed"
 
 WORKDIR /app
+
+# Copy Zscaler CA certificate if available
+COPY zscaler-ca.crt* ./
+
+# Install Zscaler CA certificate if provided
+RUN echo "==> Setting up SSL certificates..." && \
+    if [ -f zscaler-ca.crt ]; then \
+        echo "==> Installing Zscaler CA certificate..." && \
+        mkdir -p /usr/local/share/ca-certificates && \
+        cp zscaler-ca.crt /usr/local/share/ca-certificates/zscaler-ca.crt && \
+        update-ca-certificates && \
+        cat zscaler-ca.crt >> /etc/ssl/certs/ca-certificates.crt && \
+        echo "==> Zscaler CA certificate installed"; \
+    else \
+        echo "==> No Zscaler certificate found, using default certificates"; \
+    fi
+
+# Set SSL certificate environment variables for Cargo
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV CARGO_HTTP_CAINFO=/etc/ssl/certs/ca-certificates.crt
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_HTTP_CHECK_REVOKE=false
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+# Configure git to use system certificates
+RUN echo "==> Configuring Git and Cargo SSL settings..." && \
+    git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt || true && \
+    echo "==> SSL configuration complete"
+
+# Copy Cargo config if available
+COPY .cargo ./.cargo
 
 # Copy manifests first for better caching
 COPY Cargo.toml Cargo.lock* ./
 
 # Create a dummy src to build dependencies (for caching)
-RUN mkdir src && echo "fn main() {}" > src/main.rs && \
-    cargo build --target x86_64-unknown-linux-musl 2>/dev/null || cargo build 2>/dev/null || true && \
-    rm -rf src
+RUN echo "==> Building dependencies (this may take a while)..." && \
+    mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build && \
+    rm -rf src && \
+    echo "==> Dependencies built successfully" || true
 
 # Copy actual source code
 COPY src ./src
 
 # Build debug binary (not optimized for easier debugging)
-RUN touch src/main.rs && \
-    cargo build --target x86_64-unknown-linux-musl || cargo build
+RUN echo "==> Building S3Proxy debug binary..." && \
+    touch src/main.rs && \
+    cargo build && \
+    echo "==> Debug binary built successfully"
 
 # Create non-root user for security
-RUN addgroup -g 1000 s3proxy && \
+RUN echo "==> Creating non-root user..." && \
+    addgroup -g 1000 s3proxy && \
     adduser -D -u 1000 -G s3proxy s3proxy && \
-    chown -R s3proxy:s3proxy /app
+    chown -R s3proxy:s3proxy /app && \
+    echo "==> User setup complete"
 
 USER s3proxy
 
@@ -46,6 +89,6 @@ ENV RUST_LOG=debug
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/healthz || exit 1
 
-# Run debug binary (try musl target first, fallback to default)
-ENTRYPOINT ["sh", "-c", "if [ -f /app/target/x86_64-unknown-linux-musl/debug/s3proxy-rs ]; then exec /app/target/x86_64-unknown-linux-musl/debug/s3proxy-rs; else exec /app/target/debug/s3proxy-rs; fi"]
+# Run debug binary
+ENTRYPOINT ["/app/target/debug/s3proxy-rs"]
 
