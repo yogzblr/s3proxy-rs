@@ -11,7 +11,6 @@ mod gcp;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::path::Path;
 use object_store::{ObjectMeta, ObjectStore};
 use std::sync::Arc;
 
@@ -44,6 +43,7 @@ pub trait StorageBackend: Send + Sync {
     async fn head(&self, path: &str) -> Result<ObjectMeta, object_store::Error>;
 
     /// Get the underlying object store (for advanced operations)
+    #[allow(dead_code)] // Part of trait interface for extensibility
     fn object_store(&self) -> &dyn ObjectStore;
 }
 
@@ -66,10 +66,5 @@ pub async fn create_backend(config: &Config) -> Result<Arc<dyn StorageBackend>, 
             Ok(Arc::new(backend))
         }
     }
-}
-
-/// Helper to convert string path to object_store::Path
-fn to_path(s: &str) -> Path {
-    Path::from(s)
 }
 

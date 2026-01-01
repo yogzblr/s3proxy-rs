@@ -10,6 +10,7 @@ use std::collections::HashMap;
 /// S3 error response structure
 #[derive(Debug, Serialize)]
 #[serde(rename = "Error")]
+#[allow(dead_code)] // Used by error_xml function
 pub struct S3Error {
     pub code: String,
     pub message: String,
@@ -49,6 +50,7 @@ pub struct CommonPrefix {
 
 impl ListObjectsV2Result {
     /// Create a new ListObjectsV2 result
+    #[allow(dead_code)] // Reserved for future use
     pub fn new(bucket: String, prefix: Option<String>, max_keys: u32) -> Self {
         Self {
             name: bucket,
@@ -71,6 +73,7 @@ impl ListObjectsV2Result {
 }
 
 /// Generate S3-compatible error XML
+#[allow(dead_code)] // Utility function for future error handling
 pub fn error_xml(code: &str, message: &str) -> String {
     let error = S3Error {
         code: code.to_string(),

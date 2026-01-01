@@ -7,7 +7,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use object_store::ObjectMeta;
 use prometheus::{Encoder, TextEncoder};
 use std::sync::Arc;
 use tracing::{error, info, instrument};

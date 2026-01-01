@@ -7,7 +7,7 @@
 //! - Error counts
 
 use lazy_static::lazy_static;
-use prometheus::{Counter, Histogram, HistogramOpts, IntCounter, IntCounterVec, Opts, Registry};
+use prometheus::{Histogram, HistogramOpts, IntCounterVec, Opts, Registry};
 
 lazy_static! {
     /// Registry for all metrics

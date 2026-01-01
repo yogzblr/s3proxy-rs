@@ -12,13 +12,11 @@ mod s3;
 mod server;
 mod storage;
 
-use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::config::Config;
 use crate::server::Server;
-use crate::storage::StorageBackend;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -8,7 +8,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Backend storage type

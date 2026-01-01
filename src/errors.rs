@@ -17,14 +17,17 @@ pub enum S3ProxyError {
 
     /// Configuration error
     #[error("Configuration error: {0}")]
+    #[allow(dead_code)] // Reserved for future configuration validation
     Config(String),
 
     /// Invalid request
     #[error("Invalid request: {0}")]
+    #[allow(dead_code)] // Part of public API for request validation
     InvalidRequest(String),
 
     /// Object not found
     #[error("Object not found: {path}")]
+    #[allow(dead_code)] // Part of public API, used in error response mapping
     NotFound { path: String },
 
     /// Internal server error
@@ -45,6 +48,7 @@ pub enum S3ProxyError {
 
     /// XML serialization error
     #[error("XML error: {0}")]
+    #[allow(dead_code)] // Reserved for future XML error handling
     Xml(String),
 }
 

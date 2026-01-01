@@ -12,23 +12,19 @@
 mod handlers;
 
 use axum::{
-    routing::{delete, get, head, put},
+    routing::get,
     Router,
 };
 use std::sync::Arc;
 
 use crate::storage::StorageBackend;
 
-// Export handlers but avoid naming conflicts
-pub use handlers::{
-    create_bucket, delete_bucket, delete_object, get_object, head_object, health, list_objects, put_object, ready,
-};
-
 /// Query parameters for ListObjects operation
 #[derive(Debug, serde::Deserialize)]
 pub struct ListObjectsQuery {
     pub prefix: Option<String>,
     pub max_keys: Option<u32>,
+    #[allow(dead_code)] // Reserved for future pagination support
     pub continuation_token: Option<String>,
 }
 

@@ -14,7 +14,7 @@ use tower_http::{
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
-use tracing::{info, instrument};
+use tracing::info;
 
 use crate::config::Config;
 use crate::routes;
