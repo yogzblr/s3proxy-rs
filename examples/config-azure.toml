@@ -1,13 +1,27 @@
 # Example configuration for Azure Blob Storage backend
+# Supports two authentication modes:
+# 1. Managed identity (default): Uses Workload Identity or DefaultAzureCredential
+# 2. Explicit credentials: Uses access_key
 
 [server]
 bind_address = "0.0.0.0:8080"
 timeout_secs = 300
 max_body_size = 5368709120  # 5GB
 
-[backend]
-type = "azure"
-container_or_bucket = "my-container"
-prefix = ""  # Optional path prefix
-# region and endpoint are not used for Azure
+# Azure Blob Storage backend configuration
+[backend.azure]
+account_name = "mystorageaccount"
+container_name = "my-container"
 
+# Use managed identity (Workload Identity, DefaultAzureCredential)
+# Set to false to use explicit credentials below
+use_managed_identity = true
+
+# Explicit credentials (only used if use_managed_identity = false)
+# access_key = "your-storage-account-access-key"
+
+# Optional: Use Azure Storage Emulator (for local development)
+# use_emulator = false
+
+# Optional: Global path prefix for all objects
+# prefix = "optional/prefix"

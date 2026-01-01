@@ -1,14 +1,31 @@
 # Example configuration for AWS S3 backend
+# Supports two authentication modes:
+# 1. Managed identity (default): Uses IRSA, environment variables, or EC2 metadata
+# 2. Explicit credentials: Uses access_key_id and secret_access_key
 
 [server]
 bind_address = "0.0.0.0:8080"
 timeout_secs = 300
 max_body_size = 5368709120  # 5GB
 
-[backend]
-type = "aws"
-container_or_bucket = "my-s3-bucket"
-prefix = ""  # Optional path prefix
+# AWS S3 backend configuration
+[backend.aws]
+bucket_name = "my-s3-bucket"
 region = "us-east-1"
-# endpoint = "https://s3.amazonaws.com"  # Optional custom endpoint
 
+# Use managed identity (IRSA, environment variables, EC2 metadata)
+# Set to false to use explicit credentials below
+use_managed_identity = true
+
+# Explicit credentials (only used if use_managed_identity = false)
+# access_key_id = "AKIAIOSFODNN7EXAMPLE"
+# secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# Optional: Custom endpoint (for S3-compatible services like MinIO)
+# endpoint = "https://s3.amazonaws.com"
+
+# Optional: Allow HTTP connections (default: false, only HTTPS)
+# allow_http = false
+
+# Optional: Global path prefix for all objects
+# prefix = "optional/prefix"

@@ -1,14 +1,14 @@
 //! AWS S3 storage backend implementation
 //!
-//! Uses object_store::aws::AmazonS3 with managed identity via IRSA
-//! (IAM Role for Service Account) in Kubernetes. Relies on the default
-//! AWS credential chain which automatically picks up:
+//! Uses object_store::aws::AmazonS3 with support for:
+//! - Managed identity via IRSA (IAM Role for Service Account) in Kubernetes
+//! - Explicit credentials (access key ID and secret access key)
+//!
+//! When using managed identity, relies on the default AWS credential chain:
 //! - IRSA role annotations in Kubernetes
 //! - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
 //! - EC2 instance metadata
 //! - ECS task role
-//!
-//! No static credentials should be required in normal operation.
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -18,7 +18,7 @@ use object_store::path::Path;
 use object_store::{ObjectMeta, ObjectStore};
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::config::AwsConfig;
 use crate::storage::StorageBackend;
 
 /// AWS S3 storage backend
@@ -30,34 +30,46 @@ pub struct AwsBackend {
 impl AwsBackend {
     /// Create a new AWS S3 backend
     ///
-    /// Uses the default AWS credential provider chain which supports:
-    /// - IRSA (IAM Role for Service Account) in EKS
-    /// - Environment variables
-    /// - EC2 instance metadata
-    /// - ECS task role
-    pub async fn new(config: &Config) -> Result<Self, Box<dyn std::error::Error>> {
-        let region = config
-            .backend
-            .region
-            .as_deref()
-            .unwrap_or("us-east-1");
+    /// Supports two authentication modes:
+    /// 1. Managed identity (default): Uses default AWS credential provider chain
+    /// 2. Explicit credentials: Sets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars
+    pub async fn new(config: &AwsConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        // Configure authentication
+        if !config.use_managed_identity {
+            // Use explicit credentials via environment variables
+            // object_store uses the AWS SDK which reads from environment variables
+            if let (Some(access_key_id), Some(secret_access_key)) =
+                (&config.access_key_id, &config.secret_access_key)
+            {
+                std::env::set_var("AWS_ACCESS_KEY_ID", access_key_id);
+                std::env::set_var("AWS_SECRET_ACCESS_KEY", secret_access_key);
+            } else {
+                return Err("AWS credentials (access_key_id and secret_access_key) are required when use_managed_identity is false".into());
+            }
+        }
+        // If use_managed_identity is true, builder will use default credential chain
+        // (IRSA, environment variables, EC2 metadata, etc.)
 
         let mut builder = AmazonS3Builder::new()
-            .with_bucket_name(&config.backend.container_or_bucket)
-            .with_region(region);
+            .with_bucket_name(&config.bucket_name)
+            .with_region(&config.region);
 
-        // If custom endpoint is provided (e.g., for S3-compatible services)
-        if let Some(endpoint) = &config.backend.endpoint {
+        // Configure endpoint (for S3-compatible services like MinIO)
+        if let Some(endpoint) = &config.endpoint {
             builder = builder.with_endpoint(endpoint);
         }
 
-        // The builder will use the default credential provider chain
-        // which automatically handles IRSA, environment variables, etc.
+        // Configure HTTP/HTTPS
+        if config.allow_http {
+            builder = builder.with_allow_http(true);
+        }
+
+        // Build the store
         let store = Arc::new(builder.build()?);
 
         Ok(Self {
             store,
-            prefix: config.backend.prefix.clone(),
+            prefix: None, // Prefix is applied at Config level
         })
     }
 
@@ -69,6 +81,12 @@ impl AwsBackend {
             path.to_string()
         };
         Path::from(full_path)
+    }
+
+    /// Set the prefix for this backend
+    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
+        self.prefix = prefix;
+        self
     }
 }
 
@@ -110,8 +128,8 @@ impl StorageBackend for AwsBackend {
         self.store.head(&path).await
     }
 
+    #[allow(dead_code)] // Part of trait interface for extensibility
     fn object_store(&self) -> &dyn ObjectStore {
         self.store.as_ref()
     }
 }
-

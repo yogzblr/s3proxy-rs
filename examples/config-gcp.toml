@@ -1,13 +1,40 @@
 # Example configuration for Google Cloud Storage backend
+# Supports multiple authentication modes:
+# 1. Managed identity (default): Uses Application Default Credentials (ADC)
+#    - Workload Identity in GKE
+#    - GOOGLE_APPLICATION_CREDENTIALS environment variable
+#    - GCE metadata server
+# 2. Service account file: Uses service_account_path
+# 3. Service account key: Uses service_account_key (JSON string)
 
 [server]
 bind_address = "0.0.0.0:8080"
 timeout_secs = 300
 max_body_size = 5368709120  # 5GB
 
-[backend]
-type = "gcp"
-container_or_bucket = "my-gcs-bucket"
-prefix = ""  # Optional path prefix
-# region and endpoint are not used for GCP
+# Google Cloud Storage backend configuration
+[backend.gcp]
+bucket_name = "my-gcs-bucket"
 
+# Use managed identity / Application Default Credentials (ADC)
+# Set to false to use explicit credentials below
+use_managed_identity = true
+
+# Explicit credentials (only used if use_managed_identity = false)
+# Option 1: Path to service account JSON key file
+# service_account_path = "/path/to/service-account-key.json"
+
+# Option 2: Service account JSON key as string (alternative to service_account_path)
+# service_account_key = '''
+# {
+#   "type": "service_account",
+#   "project_id": "my-project",
+#   "private_key_id": "...",
+#   "private_key": "...",
+#   "client_email": "...",
+#   ...
+# }
+# '''
+
+# Optional: Global path prefix for all objects
+# prefix = "optional/prefix"

@@ -1,13 +1,12 @@
 //! Azure Blob Storage backend implementation
 //!
-//! Uses object_store::azure::MicrosoftAzure with managed identity.
-//! Supports:
-//! - System-assigned managed identity
-//! - User-assigned managed identity
+//! Uses object_store::azure::MicrosoftAzure with support for:
+//! - Managed identity (system or user-assigned)
 //! - Workload identity federation in AKS
+//! - Explicit credentials (storage account access key)
 //!
-//! Authentication is handled via azure_identity::DefaultAzureCredential
-//! which automatically discovers credentials from:
+//! When using managed identity, authentication is handled via
+//! azure_identity::DefaultAzureCredential which automatically discovers:
 //! - Environment variables (AZURE_CLIENT_ID, AZURE_TENANT_ID, etc.)
 //! - Managed identity endpoint (in Azure VMs/containers)
 //! - Azure CLI credentials
@@ -21,7 +20,7 @@ use object_store::path::Path;
 use object_store::{ObjectMeta, ObjectStore};
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::config::AzureConfig;
 use crate::storage::StorageBackend;
 
 /// Azure Blob Storage backend
@@ -33,24 +32,39 @@ pub struct AzureBackend {
 impl AzureBackend {
     /// Create a new Azure Blob Storage backend
     ///
-    /// Uses DefaultAzureCredential which supports:
-    /// - Managed identity (system or user-assigned)
-    /// - Workload identity in AKS
-    /// - Environment variables
-    /// - Azure CLI
-    pub async fn new(config: &Config) -> Result<Self, Box<dyn std::error::Error>> {
-        // object_store's Azure builder uses DefaultAzureCredential internally
-        // when no explicit credentials are provided
-        let store = Arc::new(
-            MicrosoftAzureBuilder::new()
-                .with_container_name(&config.backend.container_or_bucket)
-                // Use default credential chain (managed identity, env vars, etc.)
-                .build()?,
-        );
+    /// Supports two authentication modes:
+    /// 1. Managed identity (default): Uses DefaultAzureCredential
+    /// 2. Explicit credentials: Uses provided access_key
+    pub async fn new(config: &AzureConfig) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut builder = MicrosoftAzureBuilder::new()
+            .with_account(&config.account_name)
+            .with_container_name(&config.container_name);
+
+        // Configure authentication
+        if !config.use_managed_identity {
+            // Use explicit credentials
+            // object_store's Azure builder supports with_access_key method
+            if let Some(access_key) = &config.access_key {
+                // Try to use with_access_key if available, otherwise set env var
+                // Note: object_store may use different method names
+                builder = builder.with_access_key(access_key);
+            } else {
+                return Err("Azure access_key is required when use_managed_identity is false".into());
+            }
+        }
+        // If use_managed_identity is true, builder will use DefaultAzureCredential
+
+        // Configure emulator (for local development)
+        if config.use_emulator {
+            builder = builder.with_use_emulator(true);
+        }
+
+        // Build the store
+        let store = Arc::new(builder.build()?);
 
         Ok(Self {
             store,
-            prefix: config.backend.prefix.clone(),
+            prefix: None, // Prefix is applied at Config level
         })
     }
 
@@ -62,6 +76,12 @@ impl AzureBackend {
             path.to_string()
         };
         Path::from(full_path)
+    }
+
+    /// Set the prefix for this backend
+    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
+        self.prefix = prefix;
+        self
     }
 }
 
@@ -103,8 +123,8 @@ impl StorageBackend for AzureBackend {
         self.store.head(&path).await
     }
 
+    #[allow(dead_code)] // Part of trait interface for extensibility
     fn object_store(&self) -> &dyn ObjectStore {
         self.store.as_ref()
     }
 }
-

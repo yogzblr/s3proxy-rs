@@ -2,7 +2,7 @@
 //!
 //! Provides a unified interface for interacting with different object storage
 //! backends (AWS S3, Azure Blob Storage, Google Cloud Storage) using the
-//! object_store crate. All backends use managed identity/workload identity
+//! object_store crate. Supports both explicit credentials and managed identity
 //! for authentication.
 
 mod aws;
@@ -50,21 +50,24 @@ pub trait StorageBackend: Send + Sync {
 /// Create a storage backend based on configuration
 ///
 /// This function initializes the appropriate backend (AWS, Azure, or GCP)
-/// using managed identity/workload identity. No static credentials are required.
+/// using either explicit credentials or managed identity/workload identity
+/// based on the configuration.
 pub async fn create_backend(config: &Config) -> Result<Arc<dyn StorageBackend>, Box<dyn std::error::Error>> {
-    match config.backend.backend_type {
-        crate::config::BackendType::Aws => {
-            let backend = AwsBackend::new(config).await?;
+    match &config.backend {
+        crate::config::BackendConfig::Aws(aws_config) => {
+            let backend = AwsBackend::new(aws_config).await?;
+            let backend = backend.with_prefix(config.prefix.clone());
             Ok(Arc::new(backend))
         }
-        crate::config::BackendType::Azure => {
-            let backend = AzureBackend::new(config).await?;
+        crate::config::BackendConfig::Azure(azure_config) => {
+            let backend = AzureBackend::new(azure_config).await?;
+            let backend = backend.with_prefix(config.prefix.clone());
             Ok(Arc::new(backend))
         }
-        crate::config::BackendType::Gcp => {
-            let backend = GcpBackend::new(config).await?;
+        crate::config::BackendConfig::Gcp(gcp_config) => {
+            let backend = GcpBackend::new(gcp_config).await?;
+            let backend = backend.with_prefix(config.prefix.clone());
             Ok(Arc::new(backend))
         }
     }
 }
-
