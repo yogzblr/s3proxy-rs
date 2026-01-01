@@ -1,0 +1,45 @@
+# Debug Dockerfile for S3Proxy Rust implementation
+# Uses Alpine Rust base image with debugging tools
+
+FROM rust:1.75-alpine
+
+# Install build dependencies and debugging tools
+RUN apk add --no-cache \
+    musl-dev \
+    gdb \
+    strace \
+    curl \
+    ca-certificates
+
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build debug binary (not optimized for easier debugging)
+# Note: For faster builds during development, you might want to use cargo build without --target
+RUN cargo build --target x86_64-unknown-linux-musl || cargo build
+
+# Create non-root user for security
+RUN addgroup -g 1000 s3proxy && \
+    adduser -D -u 1000 -G s3proxy s3proxy && \
+    chown -R s3proxy:s3proxy /app
+
+USER s3proxy
+
+EXPOSE 8080
+
+# Debug binary location
+ENV RUST_BACKTRACE=1
+ENV RUST_LOG=debug
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/healthz || exit 1
+
+# Run debug binary (try musl target first, fallback to default)
+ENTRYPOINT ["sh", "-c", "if [ -f /app/target/x86_64-unknown-linux-musl/debug/s3proxy-rs ]; then exec /app/target/x86_64-unknown-linux-musl/debug/s3proxy-rs; else exec /app/target/debug/s3proxy-rs; fi"]
+

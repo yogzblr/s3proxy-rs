@@ -1,5 +1,11 @@
-# Multi-stage build for S3Proxy Rust implementation
-FROM rust:1.75 as builder
+# Multi-stage build for S3Proxy Rust implementation (Distroless)
+# Uses Alpine Rust base image for smaller final image
+
+# Build stage
+FROM rust:1.75-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
@@ -9,32 +15,24 @@ COPY Cargo.toml Cargo.lock ./
 # Copy source code
 COPY src ./src
 
-# Build release binary
-RUN cargo build --release
+# Build release binary with static linking
+RUN cargo build --release --target x86_64-unknown-linux-musl
 
-# Runtime stage
-FROM debian:bookworm-slim
-
-# Install CA certificates for TLS
-RUN apt-get update && \
-    apt-get install -y ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# Runtime stage - Distroless
+FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /build/target/release/s3proxy-rs /app/s3proxy
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/s3proxy-rs /app/s3proxy
 
-# Create non-root user
-RUN useradd -r -s /bin/false s3proxy && \
-    chown -R s3proxy:s3proxy /app
-
-USER s3proxy
+# Use non-root user (distroless images run as nonroot by default)
+USER nonroot:nonroot
 
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD ["/bin/sh", "-c", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+# Health check - distroless doesn't have shell/curl, so we check process
+# Kubernetes should use HTTP probe to /healthz endpoint instead
+# HEALTHCHECK removed - use Kubernetes liveness/readiness probes with HTTP GET /healthz
 
 ENTRYPOINT ["/app/s3proxy"]

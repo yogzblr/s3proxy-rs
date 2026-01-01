@@ -1,185 +1,383 @@
-# S3Proxy
+# S3Proxy-RS
 
-[![Github All Releases](https://img.shields.io/github/downloads/gaul/s3proxy/total.svg)](https://github.com/gaul/s3proxy/releases/)
-[![Docker Pulls](https://img.shields.io/docker/pulls/andrewgaul/s3proxy.svg)](https://hub.docker.com/r/andrewgaul/s3proxy/)
-[![Maven Central](https://img.shields.io/maven-central/v/org.gaul/s3proxy.svg)](https://search.maven.org/#search%7Cga%7C1%7Ca%3A%22s3proxy%22)
-[![Twitter Follow](https://img.shields.io/twitter/follow/S3Proxy.svg?style=social&label=Follow)](https://twitter.com/S3Proxy)
+Production-grade S3-compatible HTTP proxy for cloud object stores, written in Rust.
 
-S3Proxy implements the
-[S3 API](https://en.wikipedia.org/wiki/Amazon_S3#S3_API_and_competing_services)
-and *proxies* requests, enabling several use cases:
+## Overview
 
-* translation from S3 to Backblaze B2, EMC Atmos, Google Cloud, Microsoft Azure, and OpenStack Swift
-* testing without Amazon by using the local filesystem
-* extension via middlewares
-* embedding into Java applications
+S3Proxy-RS is a high-performance, cloud-native rewrite of [S3Proxy](https://github.com/gaul/s3proxy) in Rust. It provides an S3-compatible HTTP API that proxies requests to backend object stores (AWS S3, Azure Blob Storage, Google Cloud Storage) using managed identity/workload identity for authentication.
 
-## Usage with Docker
+### Key Features
 
-[Docker Hub](https://hub.docker.com/r/andrewgaul/s3proxy/) hosts a Docker image
-and has instructions on how to run it.
+- **S3-Compatible API**: Implements core S3 operations (GET, PUT, DELETE, HEAD, ListObjects)
+- **Multi-Cloud Support**: AWS S3, Azure Blob Storage, Google Cloud Storage
+- **Managed Identity**: Uses IRSA (AWS), Workload Identity (Azure/GCP) - no static credentials
+- **Production-Ready**: Async-first with Tokio, structured logging, Prometheus metrics
+- **Kubernetes-Native**: Designed for Kubernetes with health probes, graceful shutdown
+- **High Performance**: Zero-copy streaming, efficient async I/O
 
-## Usage without Docker
-
-Users can [download releases](https://github.com/gaul/s3proxy/releases)
-from GitHub.  Developers can build the project by running `mvn package` which
-produces a binary at `target/s3proxy`.  S3Proxy requires Java 17 or newer to
-run.
-
-Configure S3Proxy via a properties file.  An example using the local
-file system as the storage backend with anonymous access:
+## Architecture
 
 ```
-s3proxy.authorization=none
-s3proxy.endpoint=http://127.0.0.1:8080
-jclouds.provider=filesystem
-jclouds.filesystem.basedir=/tmp/s3proxy
+┌─────────────┐
+│   Client    │
+│ (aws-cli,   │
+│  SDK, etc)  │
+└──────┬──────┘
+       │ S3 HTTP API
+       │
+┌──────▼──────────────────┐
+│   S3Proxy-RS (Rust)      │
+│  ┌────────────────────┐ │
+│  │  Axum HTTP Server  │ │
+│  └──────────┬─────────┘ │
+│  ┌──────────▼─────────┐ │
+│  │  Storage Backend   │ │
+│  │     Abstraction    │ │
+│  └──────────┬─────────┘ │
+└─────────────┼───────────┘
+              │
+    ┌─────────┼─────────┐
+    │         │         │
+┌───▼───┐ ┌──▼───┐ ┌───▼───┐
+│  AWS  │ │Azure │ │  GCP  │
+│  S3   │ │ Blob │ │  GCS  │
+└───────┘ └──────┘ └───────┘
 ```
 
-First create the filesystem basedir:
+## Quick Start
 
-```
-mkdir /tmp/s3proxy
-```
+### Build
 
-Next run S3Proxy.  Linux and Mac OS X users can run the executable jar:
-
-```
-chmod +x s3proxy
-s3proxy --properties s3proxy.conf
+```bash
+cargo build --release
 ```
 
-Windows users must explicitly invoke java:
+### Run Locally
 
-```
-java -jar s3proxy --properties s3proxy.conf
-```
+```bash
+# AWS S3 backend
+export S3PROXY_BACKEND_TYPE=aws
+export S3PROXY_BACKEND_CONTAINER=my-bucket
+export S3PROXY_BACKEND_REGION=us-east-1
 
-Finally test by creating a bucket then listing all the buckets:
-
-```
-$ curl --request PUT http://localhost:8080/testbucket
-
-$ curl http://localhost:8080/
-<?xml version="1.0" ?><ListAllMyBucketsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Owner><ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID><DisplayName>CustomersName@amazon.com</DisplayName></Owner><Buckets><Bucket><Name>testbucket</Name><CreationDate>2015-08-05T22:16:24.000Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>
+./target/release/s3proxy-rs
 ```
 
-## Usage with Java
+### Docker
 
-Maven Central hosts S3Proxy artifacts and the wiki has
-[instructions on Java use](https://github.com/gaul/s3proxy/wiki/Using-S3Proxy-in-Java-projects).
-
-## Supported storage backends
-
-* atmos
-* aws-s3 (Amazon-only)
-* azureblob (deprecated)
-* azureblob-sdk (recommended)
-* b2
-* filesystem (on-disk storage, deprecated)
-* filesystem-nio2 (on-disk storage, recommended)
-* google-cloud-storage
-* openstack-swift
-* rackspace-cloudfiles-uk and rackspace-cloudfiles-us
-* s3 (all implementations)
-* transient (in-memory storage, deprecated)
-* transient-nio2 (in-memory storage, recommended)
-
-See the wiki for [examples of configurations](https://github.com/gaul/s3proxy/wiki/Storage-backend-examples).
-
-## Assigning buckets to backends
-
-S3Proxy can be configured to assign buckets to different backends with the same
-credentials. The configuration in the properties file is as follows:
-```
-s3proxy.bucket-locator.1=bucket
-s3proxy.bucket-locator.2=another-bucket
+```bash
+docker build -t s3proxy-rs:latest .
+docker run -p 8080:8080 \
+  -e S3PROXY_BACKEND_TYPE=aws \
+  -e S3PROXY_BACKEND_CONTAINER=my-bucket \
+  -e S3PROXY_BACKEND_REGION=us-east-1 \
+  s3proxy-rs:latest
 ```
 
-In addition to the explicit names, [glob syntax](https://docs.oracle.com/javase/tutorial/essential/io/fileOps.html#glob) can be used to configure many
-buckets for a given backend.
+## Configuration
 
-A bucket (or a glob) cannot be assigned to multiple backends.
+### Environment Variables
 
-## Middlewares
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `S3PROXY_BACKEND_TYPE` | Backend type: `aws`, `azure`, `gcp` | `aws` |
+| `S3PROXY_BACKEND_CONTAINER` | Bucket/container name | Required |
+| `S3PROXY_BACKEND_PREFIX` | Optional path prefix | None |
+| `S3PROXY_BACKEND_REGION` | AWS region (AWS only) | `us-east-1` |
+| `S3PROXY_BACKEND_ENDPOINT` | Custom endpoint URL | None |
+| `S3PROXY_BIND_ADDRESS` | Server bind address | `0.0.0.0:8080` |
+| `S3PROXY_TIMEOUT_SECS` | Request timeout | `300` |
+| `S3PROXY_MAX_BODY_SIZE` | Max request size (bytes) | `5368709120` (5GB) |
+| `S3PROXY_LOG_LEVEL` | Log level | `info` |
+| `S3PROXY_CONFIG_FILE` | Optional TOML config file | None |
 
-S3Proxy can modify its behavior based on middlewares:
+### Config File (TOML)
 
-* [bucket aliasing](https://github.com/gaul/s3proxy/wiki/Middleware-alias-blobstore)
-* [bucket prefix scoping](https://github.com/gaul/s3proxy/wiki/Middleware-prefix-blobstore)
-* [bucket locator](https://github.com/gaul/s3proxy/wiki/Middleware-bucket-locator)
-* [eventual consistency modeling](https://github.com/gaul/s3proxy/wiki/Middleware---eventual-consistency)
-* [large object mocking](https://github.com/gaul/s3proxy/wiki/Middleware-large-object-mocking)
-* [latency](https://github.com/gaul/s3proxy/wiki/Middleware-latency)
-* [read-only](https://github.com/gaul/s3proxy/wiki/Middleware-read-only)
-* [regex rename blobs](https://github.com/gaul/s3proxy/wiki/Middleware-regex)
-* [sharded backend containers](https://github.com/gaul/s3proxy/wiki/Middleware-sharded-backend)
-* [storage class override](https://github.com/gaul/s3proxy/wiki/Middleware-storage-class-override)
-* [user metadata replacer](https://github.com/gaul/s3proxy/wiki/Middleware-user-metadata-replacer)
-* [no cache override](https://github.com/gaul/s3proxy/wiki/Middleware-no-cache)
+Create `config.toml`:
 
-## SSL Support
+```toml
+[server]
+bind_address = "0.0.0.0:8080"
+timeout_secs = 300
+max_body_size = 5368709120
 
-S3Proxy can listen on HTTPS by setting the `secure-endpoint` and [configuring a keystore](http://wiki.eclipse.org/Jetty/Howto/Configure_SSL#Generating_Keys_and_Certificates_with_JDK_keytool). You can read more about how configure S3Proxy for SSL Support in [the dedicated wiki page](https://github.com/gaul/s3proxy/wiki/SSL-support) with Docker, Kubernetes or simply Java.
-
-## Limitations
-
-S3Proxy has broad compatibility with the S3 API, however, it does not support:
-
-* ACLs other than private and public-read
-* BitTorrent hosting
-* bucket logging
-* bucket policies
-* [CORS bucket operations](https://docs.aws.amazon.com/AmazonS3/latest/dev/cors.html#how-do-i-enable-cors) like getting or setting the CORS configuration for a bucket. S3Proxy only supports a static configuration (see below).
-* hosting static websites
-* object server-side encryption
-* object tagging
-* object versioning, see [#74](https://github.com/gaul/s3proxy/issues/74)
-* POST upload policies, see [#73](https://github.com/gaul/s3proxy/issues/73)
-* requester pays buckets
-* [select object content](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html)
-
-S3Proxy emulates the following operations:
-
-* conditional PUT object when using If-Match or If-None-Match, unless the `azureblob-sdk` provider is used
-* copy multi-part objects, see [#76](https://github.com/gaul/s3proxy/issues/76)
-
-S3Proxy has basic CORS preflight and actual request/response handling. It can be configured within the properties
-file (and corresponding ENV variables for Docker):
-
-```
-s3proxy.cors-allow-origins=https://example\.com https://.+\.example\.com https://example\.cloud
-s3proxy.cors-allow-methods=GET PUT
-s3proxy.cors-allow-headers=Accept Content-Type
-s3proxy.cors-allow-credential=true
+[backend]
+type = "aws"
+container_or_bucket = "my-bucket"
+prefix = "optional/prefix"
+region = "us-east-1"
 ```
 
-CORS cannot be configured per bucket. `s3proxy.cors-allow-all=true` will accept any origin and header.
-Actual CORS requests are supported for GET, PUT, POST, HEAD and DELETE methods.
+Set `S3PROXY_CONFIG_FILE=/path/to/config.toml` to use it.
 
-The wiki collects
-[compatibility notes](https://github.com/gaul/s3proxy/wiki/Storage-backend-compatibility)
-for specific storage backends.
+## Cloud Provider Setup
 
-## Support
+### AWS (IRSA)
 
-* [GitHub issues](https://github.com/gaul/s3proxy/issues)
-* [Stack Overflow](https://stackoverflow.com/questions/tagged/s3proxy)
-* [commercial support](mailto:andrew@gaul.org)
+S3Proxy uses IAM Role for Service Account (IRSA) in EKS. See [deploy/aws-irsa-setup.md](deploy/aws-irsa-setup.md) for detailed setup.
 
-## References
+**Quick setup:**
 
-* [Apache jclouds](https://jclouds.apache.org/) provides storage backend support for S3Proxy
-* [Ceph s3-tests](https://github.com/ceph/s3-tests) help maintain and improve compatibility with the S3 API
-* [fake-s3](https://github.com/jubos/fake-s3), [gofakes3](https://github.com/johannesboyne/gofakes3), [minio](https://github.com/minio/minio), [S3 ninja](https://github.com/scireum/s3ninja), and [s3rver](https://github.com/jamhall/s3rver) provide functionality similar to S3Proxy when using the filesystem backend
-* [GlacierProxy](https://github.com/bouncestorage/glacier-proxy) and [SwiftProxy](https://github.com/bouncestorage/swiftproxy) provide similar functionality for the Amazon Glacier and OpenStack Swift APIs
-* [s3mock](https://github.com/adobe/S3Mock) - Adobe's s3 mock implementation
-* [sbt-s3](https://github.com/localytics/sbt-s3) runs S3Proxy via the Scala Build Tool
-* [swift3](https://github.com/openstack/swift3) provides an S3 middleware for OpenStack Swift
-* [Zenko](https://www.zenko.io/) provide similar multi-cloud functionality
+1. Create IAM role with S3 permissions
+2. Annotate ServiceAccount:
+   ```yaml
+   annotations:
+     eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/s3proxy-role
+   ```
+3. Deploy with AWS backend configuration
+
+### Azure (Workload Identity)
+
+S3Proxy uses Azure Workload Identity in AKS. See [deploy/azure-workload-identity-setup.md](deploy/azure-workload-identity-setup.md) for detailed setup.
+
+**Quick setup:**
+
+1. Create managed identity
+2. Grant "Storage Blob Data Contributor" role
+3. Configure federated identity credential
+4. Annotate ServiceAccount and Pod:
+   ```yaml
+   serviceAccount:
+     annotations:
+       azure.workload.identity/client-id: CLIENT_ID
+   pod:
+     annotations:
+       azure.workload.identity/use: "true"
+   ```
+
+### GCP (Workload Identity)
+
+S3Proxy uses GCP Workload Identity in GKE. See [deploy/gcp-workload-identity-setup.md](deploy/gcp-workload-identity-setup.md) for detailed setup.
+
+**Quick setup:**
+
+1. Create GCP service account
+2. Grant "Storage Object Admin" role
+3. Bind Kubernetes SA to GCP SA
+4. Annotate ServiceAccount:
+   ```yaml
+   annotations:
+     iam.gke.io/gcp-service-account: SA@PROJECT.iam.gserviceaccount.com
+   ```
+
+## Kubernetes Deployment
+
+### Deploy
+
+```bash
+# Edit deploy/k8s.yaml with your configuration
+kubectl apply -f deploy/k8s.yaml
+```
+
+### Verify
+
+```bash
+# Check pods
+kubectl get pods -l app=s3proxy
+
+# Check logs
+kubectl logs -l app=s3proxy
+
+# Test health endpoint
+kubectl port-forward svc/s3proxy 8080:80
+curl http://localhost:8080/healthz
+```
+
+## API Endpoints
+
+### S3 Operations
+
+- `GET /{bucket}/{key}` - GetObject
+- `PUT /{bucket}/{key}` - PutObject
+- `DELETE /{bucket}/{key}` - DeleteObject
+- `HEAD /{bucket}/{key}` - HeadObject
+- `GET /{bucket}?prefix=...` - ListObjectsV2
+- `PUT /{bucket}` - CreateBucket (noop)
+- `DELETE /{bucket}` - DeleteBucket (noop)
+
+### System Endpoints
+
+- `GET /healthz` - Liveness probe
+- `GET /ready` - Readiness probe
+- `GET /metrics` - Prometheus metrics
+
+## Testing
+
+### Using AWS CLI
+
+```bash
+# Configure endpoint
+export AWS_ENDPOINT_URL=http://localhost:8080
+
+# List objects
+aws s3 ls s3://my-bucket/ --endpoint-url $AWS_ENDPOINT_URL
+
+# Upload file
+aws s3 cp file.txt s3://my-bucket/file.txt --endpoint-url $AWS_ENDPOINT_URL
+
+# Download file
+aws s3 cp s3://my-bucket/file.txt file.txt --endpoint-url $AWS_ENDPOINT_URL
+```
+
+### Using s3cmd
+
+```bash
+# Configure
+s3cmd --configure --host=localhost:8080 --host-bucket=localhost:8080
+
+# Use normally
+s3cmd ls s3://my-bucket/
+s3cmd put file.txt s3://my-bucket/
+s3cmd get s3://my-bucket/file.txt
+```
+
+### Using curl
+
+```bash
+# Put object
+curl -X PUT http://localhost:8080/my-bucket/test.txt \
+  --data-binary @file.txt
+
+# Get object
+curl http://localhost:8080/my-bucket/test.txt
+
+# List objects
+curl "http://localhost:8080/my-bucket?prefix=test"
+```
+
+## Observability
+
+### Logging
+
+Structured JSON logs via `tracing`:
+
+```json
+{"level":"info","message":"GetObject request","bucket":"my-bucket","key":"test.txt","target":"s3proxy::routes::handlers","spans":[{"bucket":"my-bucket","key":"test.txt"}]}
+```
+
+Set log level:
+```bash
+export RUST_LOG=debug
+```
+
+### Metrics
+
+Prometheus metrics available at `/metrics`:
+
+- `s3proxy_http_requests_total` - HTTP request count by method/status
+- `s3proxy_http_request_duration_seconds` - HTTP request latency
+- `s3proxy_storage_operations_total` - Storage operation count
+- `s3proxy_storage_operation_duration_seconds` - Storage operation latency
+
+### Request IDs
+
+All requests include a unique request ID in headers for tracing.
+
+## Performance
+
+- **Async I/O**: Fully async using Tokio
+- **Zero-Copy**: Streaming uploads/downloads where possible
+- **Backpressure**: Proper handling of slow clients
+- **Connection Pooling**: Efficient backend connections
+
+## Limitations & TODOs
+
+### Current Limitations
+
+- Signature verification is not implemented (focus on proxying)
+- Multipart uploads not yet supported
+- Delimiter support in ListObjects not implemented
+- Content-type detection based on extension not implemented
+
+### Extensibility Points
+
+The codebase includes TODO markers for:
+- Signature verification (optional/pluggable)
+- Multipart upload support
+- Advanced metadata handling
+- Custom authentication middleware
+- Request/response transformation
+
+## Development
+
+### Build
+
+```bash
+cargo build
+```
+
+### Test
+
+```bash
+cargo test
+```
+
+### Run
+
+```bash
+cargo run
+```
+
+### Format
+
+```bash
+cargo fmt
+```
+
+### Lint
+
+```bash
+cargo clippy
+```
+
+## Project Structure
+
+```
+s3proxy-rs/
+├── Cargo.toml          # Dependencies
+├── Dockerfile          # Container image
+├── src/
+│   ├── main.rs         # Entry point
+│   ├── config.rs       # Configuration
+│   ├── errors.rs       # Error types
+│   ├── metrics.rs      # Prometheus metrics
+│   ├── routes/         # HTTP handlers
+│   ├── s3/             # S3 API types
+│   ├── server/         # HTTP server
+│   └── storage/        # Storage backends
+│       ├── mod.rs
+│       ├── aws.rs
+│       ├── azure.rs
+│       └── gcp.rs
+├── deploy/             # Kubernetes manifests
+│   ├── k8s.yaml
+│   ├── rbac.yaml
+│   └── *-setup.md     # Cloud provider setup guides
+└── README-RUST.md      # This file
+```
 
 ## License
 
-Copyright (C) 2014-2025 Andrew Gaul
+Apache 2.0 (same as original S3Proxy)
 
-Licensed under the Apache License, Version 2.0
+## Contributing
+
+This is a production rewrite. Contributions should maintain:
+- Production-grade code quality
+- Comprehensive error handling
+- Extensive documentation
+- Cloud-native best practices
+
+## Differences from Java S3Proxy
+
+- **Language**: Rust instead of Java
+- **Runtime**: Tokio async instead of Jetty
+- **Storage**: object_store crate instead of jclouds
+- **Identity**: Native managed identity support (no credential injection)
+- **Performance**: Zero-copy streaming, efficient async I/O
+- **Deployment**: Kubernetes-first design
+
+## Support
+
+For issues and questions, please open an issue in the repository.
+

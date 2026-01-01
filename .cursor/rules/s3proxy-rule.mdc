@@ -1,0 +1,121 @@
+---
+alwaysApply: true
+# Cursor rules for s3proxy-rs
+# Purpose: Rewrite Java s3proxy into production-grade Rust using Tokio + object_store
+
+# ============================
+# GENERAL BEHAVIOR
+# ============================
+- Treat this repository as a long-running, multi-file refactor project.
+- Prefer correctness, clarity, and production readiness over brevity.
+- Generate complete, compiling Rust files unless explicitly told otherwise.
+- Never generate partial snippets without context unless asked.
+- Always consider async correctness and non-blocking behavior.
+- Avoid placeholders unless marked with TODO.
+
+# ============================
+# LANGUAGE & STYLE
+# ============================
+- Use stable Rust only.
+- Use Tokio for async execution.
+- Use Axum for HTTP routing.
+- Use object_store for all storage access.
+- Prefer explicit error types using `thiserror`.
+- Use `anyhow` only at application boundaries.
+- Avoid unwrap() except in tests.
+- Follow Rust 2021 idioms.
+- Favor composition over inheritance.
+
+# ============================
+# CLOUD IDENTITY RULES
+# ============================
+- Never hardcode credentials.
+- Always use managed identity mechanisms:
+  - AWS: IRSA via aws-config default chain
+  - Azure: DefaultAzureCredential
+  - GCP: ADC / workload identity
+- Ensure compatibility with Kubernetes.
+
+# ============================
+# STORAGE RULES
+# ============================
+- All object operations must go through a StorageBackend abstraction.
+- StorageBackend must wrap object_store::ObjectStore.
+- Streaming APIs must be used for GET and PUT.
+- Do not load entire objects into memory unnecessarily.
+
+# ============================
+# API SEMANTICS
+# ============================
+- Implement S3-compatible endpoints.
+- Use XML responses matching AWS formats.
+- Use correct HTTP status codes.
+- HEAD requests must not return a body.
+- ListObjects must support prefix filtering.
+- Multipart support can be TODO.
+
+# ============================
+# OBSERVABILITY
+# ============================
+- Use tracing for logging.
+- Add span per request.
+- Include request_id propagation.
+- Expose Prometheus metrics at /metrics.
+- Track latency and error counts.
+
+# ============================
+# KUBERNETES
+# ============================
+- Must support graceful shutdown.
+- Handle SIGTERM correctly.
+- Provide readiness and liveness endpoints.
+- Assume execution inside Kubernetes.
+- Do not assume filesystem persistence.
+
+# ============================
+# PROJECT STRUCTURE
+# ============================
+- Keep modules small and well-named.
+- Follow this structure:
+
+src/
+  main.rs
+  config/
+  server/
+  routes/
+  storage/
+  s3/
+  metrics/
+  errors.rs
+
+# ============================
+# OUTPUT RULES
+# ============================
+- When generating code:
+  - Ensure it compiles.
+  - Include imports.
+  - Avoid pseudo-code.
+- When generating multiple files:
+  - Clearly label each file.
+- When modifying files:
+  - Show full updated content.
+- Add comments explaining design decisions.
+
+# ============================
+# MIGRATION INTENT
+# ============================
+- This project replaces Java s3proxy.
+- Behavior should match S3Proxy where practical.
+- Favor correctness over feature parity.
+- Leave TODOs where AWS compatibility is complex.
+
+# ============================
+# SAFETY
+# ============================
+- No secrets.
+- No embedded credentials.
+- No hardcoded cloud identifiers.
+
+# End of rules
+
+---
