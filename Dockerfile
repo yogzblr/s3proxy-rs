@@ -1,49 +1,40 @@
-FROM docker.io/library/eclipse-temurin:21-jre
-LABEL maintainer="Andrew Gaul <andrew@gaul.org>"
+# Multi-stage build for S3Proxy Rust implementation
+FROM rust:1.75 as builder
 
-WORKDIR /opt/s3proxy
+WORKDIR /build
 
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+
+# Build release binary
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install CA certificates for TLS
 RUN apt-get update && \
-    apt-get install -y dumb-init && \
+    apt-get install -y ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY \
-    target/s3proxy \
-    src/main/resources/run-docker-container.sh \
-    /opt/s3proxy/
+WORKDIR /app
 
-ENV \
-    LOG_LEVEL="info" \
-    S3PROXY_AUTHORIZATION="aws-v2-or-v4" \
-    S3PROXY_ENDPOINT="http://0.0.0.0:80" \
-    S3PROXY_IDENTITY="local-identity" \
-    S3PROXY_CREDENTIAL="local-credential" \
-    S3PROXY_VIRTUALHOST="" \
-    S3PROXY_KEYSTORE_PATH="keystore.jks" \
-    S3PROXY_KEYSTORE_PASSWORD="password" \
-    S3PROXY_CORS_ALLOW_ALL="false" \
-    S3PROXY_CORS_ALLOW_ORIGINS="" \
-    S3PROXY_CORS_ALLOW_METHODS="" \
-    S3PROXY_CORS_ALLOW_HEADERS="" \
-    S3PROXY_CORS_ALLOW_CREDENTIAL="" \
-    S3PROXY_IGNORE_UNKNOWN_HEADERS="false" \
-    S3PROXY_ENCRYPTED_BLOBSTORE="" \
-    S3PROXY_ENCRYPTED_BLOBSTORE_PASSWORD="" \
-    S3PROXY_ENCRYPTED_BLOBSTORE_SALT="" \
-    S3PROXY_READ_ONLY_BLOBSTORE="false" \
-    JCLOUDS_PROVIDER="filesystem-nio2" \
-    JCLOUDS_ENDPOINT="" \
-    JCLOUDS_REGION="" \
-    JCLOUDS_REGIONS="us-east-1" \
-    JCLOUDS_IDENTITY="remote-identity" \
-    JCLOUDS_CREDENTIAL="remote-credential" \
-    JCLOUDS_KEYSTONE_VERSION="" \
-    JCLOUDS_KEYSTONE_SCOPE="" \
-    JCLOUDS_KEYSTONE_PROJECT_DOMAIN_NAME="" \
-    JCLOUDS_FILESYSTEM_BASEDIR="/data"
+# Copy binary from builder
+COPY --from=builder /build/target/release/s3proxy-rs /app/s3proxy
 
-EXPOSE 80 443
+# Create non-root user
+RUN useradd -r -s /bin/false s3proxy && \
+    chown -R s3proxy:s3proxy /app
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+USER s3proxy
 
-CMD ["/opt/s3proxy/run-docker-container.sh"]
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD ["/bin/sh", "-c", "wget --quiet --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+
+ENTRYPOINT ["/app/s3proxy"]

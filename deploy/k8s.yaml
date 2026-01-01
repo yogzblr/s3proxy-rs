@@ -1,0 +1,152 @@
+---
+# ServiceAccount for S3Proxy
+# This ServiceAccount will be annotated with workload identity credentials
+# depending on the cloud provider (IRSA for AWS, Workload Identity for Azure/GCP)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: s3proxy
+  namespace: default
+  annotations:
+    # AWS IRSA annotation (uncomment and set for AWS)
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/s3proxy-role
+    
+    # Azure Workload Identity annotation (uncomment and set for Azure)
+    # azure.workload.identity/client-id: CLIENT_ID
+    
+    # GCP Workload Identity annotation (uncomment and set for GCP)
+    # iam.gke.io/gcp-service-account: SERVICE_ACCOUNT@PROJECT_ID.iam.gserviceaccount.com
+---
+# Deployment for S3Proxy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3proxy
+  namespace: default
+  labels:
+    app: s3proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: s3proxy
+  template:
+    metadata:
+      labels:
+        app: s3proxy
+      annotations:
+        # Azure Workload Identity annotation (uncomment for Azure)
+        # azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: s3proxy
+      containers:
+      - name: s3proxy
+        image: s3proxy-rs:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        # Backend configuration
+        - name: S3PROXY_BACKEND_TYPE
+          value: "aws"  # Options: aws, azure, gcp
+        - name: S3PROXY_BACKEND_CONTAINER
+          value: "my-bucket"  # Bucket/container name
+        - name: S3PROXY_BACKEND_PREFIX
+          value: ""  # Optional path prefix
+        - name: S3PROXY_BACKEND_REGION
+          value: "us-east-1"  # AWS region (for AWS backend)
+        - name: S3PROXY_BACKEND_ENDPOINT
+          value: ""  # Optional custom endpoint URL
+        
+        # Server configuration
+        - name: S3PROXY_BIND_ADDRESS
+          value: "0.0.0.0:8080"
+        - name: S3PROXY_TIMEOUT_SECS
+          value: "300"
+        - name: S3PROXY_MAX_BODY_SIZE
+          value: "5368709120"  # 5GB in bytes
+        
+        # Logging
+        - name: S3PROXY_LOG_LEVEL
+          value: "info"
+        - name: RUST_LOG
+          value: "info"
+        
+        # Optional: Config file path
+        # - name: S3PROXY_CONFIG_FILE
+        #   value: "/etc/s3proxy/config.toml"
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+---
+# Service for S3Proxy
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3proxy
+  namespace: default
+  labels:
+    app: s3proxy
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: s3proxy
+---
+# Optional: Ingress for external access
+# Uncomment and configure for your ingress controller
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: s3proxy
+#   namespace: default
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+# spec:
+#   rules:
+#   - host: s3proxy.example.com
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: s3proxy
+#             port:
+#               number: 80
+

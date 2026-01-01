@@ -1,0 +1,13 @@
+# Example configuration for Azure Blob Storage backend
+
+[server]
+bind_address = "0.0.0.0:8080"
+timeout_secs = 300
+max_body_size = 5368709120  # 5GB
+
+[backend]
+type = "azure"
+container_or_bucket = "my-container"
+prefix = ""  # Optional path prefix
+# region and endpoint are not used for Azure
+

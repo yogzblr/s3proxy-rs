@@ -1,0 +1,14 @@
+# Example configuration for AWS S3 backend
+
+[server]
+bind_address = "0.0.0.0:8080"
+timeout_secs = 300
+max_body_size = 5368709120  # 5GB
+
+[backend]
+type = "aws"
+container_or_bucket = "my-s3-bucket"
+prefix = ""  # Optional path prefix
+region = "us-east-1"
+# endpoint = "https://s3.amazonaws.com"  # Optional custom endpoint
+

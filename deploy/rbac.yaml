@@ -1,0 +1,35 @@
+---
+# RBAC configuration for S3Proxy
+# Most deployments won't need RBAC unless you're using Kubernetes API features
+# This is included for completeness
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: s3proxy
+  namespace: default
+---
+# Optional: ClusterRole if needed for advanced features
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: s3proxy
+# rules:
+# - apiGroups: [""]
+#   resources: ["secrets"]
+#   verbs: ["get", "list"]
+---
+# Optional: ClusterRoleBinding if ClusterRole is used
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: s3proxy
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: s3proxy
+# subjects:
+# - kind: ServiceAccount
+#   name: s3proxy
+#   namespace: default
+

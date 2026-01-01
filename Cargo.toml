@@ -1,0 +1,79 @@
+[package]
+name = "s3proxy-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["S3Proxy Contributors"]
+license = "Apache-2.0"
+description = "Production-grade S3-compatible proxy for cloud object stores"
+repository = "https://github.com/gaul/s3proxy"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# HTTP server
+axum = "0.7"
+hyper = { version = "1.1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "timeout"] }
+
+# Object storage abstraction
+object_store = { version = "0.10", features = ["aws", "azure", "gcp"] }
+
+# AWS SDK
+aws-config = "1.1"
+aws-sdk-s3 = "1.20"
+
+# Azure identity
+azure_identity = "0.19"
+azure_storage_blobs = "0.19"
+
+# GCP (via object_store, but may need additional)
+# object_store handles GCP via gcloud SDK
+
+# Configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.22"
+opentelemetry = "0.21"
+opentelemetry-prometheus = "0.12"
+prometheus = "0.13"
+
+# Utilities
+bytes = "1.5"
+futures = "0.3"
+http = "1.0"
+http-body = "1.0"
+mime = "0.3"
+mime_guess = "2.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+url = "2.5"
+
+# XML for S3 responses
+quick-xml = { version = "0.31", features = ["serialize"] }
+
+# Async streaming
+futures-util = "0.3"
+async-trait = "0.1"
+lazy_static = "1.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
